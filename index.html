@@ -43,12 +43,14 @@
         async function calculateDividend() {
             const stockId = document.getElementById('stockId').value;
             const numShares = document.getElementById('shares').value * 1000; // 轉為股數
-            const apiToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0zMCAxNzo1MTowMCIsInVzZXJfaWQiOiJqb24iLCJpcCI6IjExNC4zMi4yMTcuNDQiLCJleHAiOjE3NzU0NjkwNjB9.euIt8kina1zV0333G9fRSLjEvZfK05vklARU4wbGgds"; // 建議註冊後填入，或留空(有限制)
+            //const apiToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0zMCAxNzo1MTowMCIsInVzZXJfaWQiOiJqb24iLCJpcCI6IjExNC4zMi4yMTcuNDQiLCJleHAiOjE3NzU0NjkwNjB9.euIt8kina1zV0333G9fRSLjEvZfK05vklARU4wbGgds"; // 建議註冊後填入，或留空(有限制)
             
             // 彈出視窗詢問 Token (或者你可以做一個 input 框)
             const apiToken = prompt("請輸入您的 FinMind API Token (可至官網免費申請):");
             
             if(!apiToken) return; // 沒填就取消
+
+            const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${stockId}&start_date=2022-01-01&token=${apiToken}`;
 
             try {
                 const response = await fetch(url);
