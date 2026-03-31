@@ -112,32 +112,14 @@ async function calculateDividend() {
         console.log("第一筆資料內容範例:", data[0]); // 這行會在 Console 印出真相
 
         data.forEach(item => {
-            // 1. 抓取年份 (優先找 date 或 Date)
             const dateStr = item.date || item.Date || "";
             const year = dateStr.substring(0, 4);
             
-            if (year && year.length === 4) {
-                // 2. 暴力搜尋：嘗試所有可能的現金股利欄位名稱
-                // 有些版本回傳 CashDividend，有些可能是 cash_dividend
-                let cashVal = parseFloat(
-                    item.CashDividend ?? 
-                    item.cash_dividend ?? 
-                    item.cashDividend ?? 
-                    item.Cash_Dividend ?? 0
-                );
-
-                // 3. 額外檢查：如果上面都抓不到，且該物件只有兩個欄位（通常其中一個就是股利）
-                if (isNaN(cashVal) || cashVal === 0) {
-                    for (let key in item) {
-                        if (key.toLowerCase().includes('dividend') && !key.toLowerCase().includes('date')) {
-                            cashVal = parseFloat(item[key]);
-                        }
-                    }
-                }
-                
-                if (!isNaN(cashVal) && cashVal > 0) {
-                    yearlySum[year] = (yearlySum[year] || 0) + cashVal;
-                }
+            // 核心修正：使用正確的欄位名稱 'CashEarningsDistribution'
+            const cashVal = parseFloat(item.CashEarningsDistribution || 0);
+            
+            if (year && !isNaN(cashVal) && cashVal > 0) {
+                yearlySum[year] = (yearlySum[year] || 0) + cashVal;
             }
         });
 
