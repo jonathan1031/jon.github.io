@@ -2,87 +2,161 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>我的股票股利計算機</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinMind 股利計算工具</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; }
+        .card { border: none; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .result-card { display: none; }
+        .table { vertical-align: middle; }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container py-5">
-        <h2 class="mb-4">FinMind 股利試算工具</h2>
-        
-        <div class="card p-4 mb-4">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label>股票代碼</label>
-                    <input type="text" id="stockId" class="form-control" placeholder="例如: 2330">
+<body>
+
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="fw-bold">年度股利自動試算</h1>
+        <p class="text-muted">利用 FinMind API 快速計算庫存資產收益</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card p-4 mb-4">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-primary">1. FinMind API Token</label>
+                        <input type="password" id="apiToken" class="form-control" placeholder="在此貼上您的私密 Token">
+                        <div class="form-text">尚未有 Token？請至 <a href="https://finmindtrade.com/" target="_blank">FinMind 官網</a> 免費註冊領取。</div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">2. 股票代碼</label>
+                        <input type="text" id="stockId" class="form-control" placeholder="例如: 2330" value="2330">
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">3. 持股張數</label>
+                        <input type="number" id="shares" class="form-control" value="1" step="0.1">
+                    </div>
+
+                    <div class="col-12 mt-4">
+                        <button onclick="calculateDividend()" id="btnSubmit" class="btn btn-primary w-100 py-2 fw-bold">
+                            開始計算股利
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-4">
-                    <label>持股張數</label>
-                    <input type="number" id="shares" class="form-control" placeholder="1">
+            </div>
+
+            <div id="resultArea" class="card p-4 result-card">
+                <h4 class="mb-3 border-bottom pb-2">試算結果 <span id="displayStock" class="badge bg-secondary ms-2"></span></h4>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>配息年份</th>
+                                <th class="text-end">每股現金總額</th>
+                                <th class="text-end">預計領取金額 (TWD)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultTable">
+                            </tbody>
+                    </table>
                 </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button onclick="calculateDividend()" class="btn btn-primary w-100">計算年度股利</button>
+                <div class="alert alert-info mt-3 small">
+                    註：本工具僅計算「現金股利」，不含股票股利。金額採四捨五入計算。
                 </div>
             </div>
         </div>
-
-        <div id="resultArea" class="mt-4">
-            <table class="table table-striped bg-white">
-                <thead>
-                    <tr>
-                        <th>年份</th>
-                        <th>每股現金股利總和</th>
-                        <th>預計領取金額 (TWD)</th>
-                    </tr>
-                </thead>
-                <tbody id="resultTable"></tbody>
-            </table>
-        </div>
     </div>
+</div>
 
-    <script>
-        async function calculateDividend() {
-            const stockId = document.getElementById('stockId').value;
-            const numShares = document.getElementById('shares').value * 1000; // 轉為股數
-            //const apiToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJkYXRlIjoiMjAyNi0wMy0zMCAxNzo1MTowMCIsInVzZXJfaWQiOiJqb24iLCJpcCI6IjExNC4zMi4yMTcuNDQiLCJleHAiOjE3NzU0NjkwNjB9.euIt8kina1zV0333G9fRSLjEvZfK05vklARU4wbGgds"; // 建議註冊後填入，或留空(有限制)
-            
-            // 彈出視窗詢問 Token (或者你可以做一個 input 框)
-            const apiToken = prompt("請輸入您的 FinMind API Token (可至官網免費申請):");
-            
-            if(!apiToken) return; // 沒填就取消
+<script>
+async function calculateDividend() {
+    const btn = document.getElementById('btnSubmit');
+    const stockId = document.getElementById('stockId').value.trim();
+    const numShares = parseFloat(document.getElementById('shares').value) * 1000;
+    const apiToken = document.getElementById('apiToken').value.trim();
 
-            const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${stockId}&start_date=2022-01-01&token=${apiToken}`;
+    if (!apiToken || !stockId) {
+        alert("請確認 Token 與 股票代碼 皆已輸入！");
+        return;
+    }
 
-            try {
-                const response = await fetch(url);
-                const result = await response.json();
-                const data = result.data;
+    // 顯示讀取狀態
+    btn.disabled = true;
+    btn.innerText = "資料讀取中...";
 
-                // 邏輯：按年份分組加總 CashDividend
-                const yearlySum = {};
-                data.forEach(item => {
-                    const year = item.date.substring(0, 4);
-                    yearlySum[year] = (yearlySum[year] || 0) + item.CashDividend;
-                });
+    // 構建 API URL (TaiwanStockDividend)
+    // 預設抓取 2020 至今的資料
+    const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${stockId}&start_date=2020-01-01&token=${apiToken}`;
 
-                // 渲染表格
-                const tbody = document.getElementById('resultTable');
-                tbody.innerHTML = "";
-                
-                Object.keys(yearlySum).sort().reverse().forEach(year => {
-                    const totalCash = yearlySum[year] * numShares;
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${year}</td>
-                            <td>${yearlySum[year].toFixed(2)}</td>
-                            <td>$${Math.round(totalCash).toLocaleString()}</td>
-                        </tr>
-                    `;
-                });
-            } catch (error) {
-                alert("抓取資料失敗，請檢查代碼或 API 限制");
-                console.error(error);
-            }
+    try {
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.status !== 200) {
+            throw new Error(result.msg || "API 請求失敗");
         }
-    </script>
+
+        const data = result.data;
+        if (!data || data.length === 0) {
+            alert("查無此股票之股利資料，請確認代碼是否正確。");
+            return;
+        }
+
+        // --- 核心逻辑：處理 NaN 與 年度加總 ---
+        const yearlySum = {};
+        
+        data.forEach(item => {
+            // 解析年份 (從 date 欄位抓取前四碼)
+            const year = item.date ? item.date.substring(0, 4) : "Unknown";
+            
+            // 重要：修正 NaN 關鍵點
+            // FinMind 欄位為 CashDividend (注意大小寫)
+            const cashVal = parseFloat(item.CashDividend);
+            
+            // 如果 cashVal 是數字才加總，否則當作 0
+            if (!isNaN(cashVal)) {
+                yearlySum[year] = (yearlySum[year] || 0) + cashVal;
+            }
+        });
+
+        // 渲染畫面
+        document.getElementById('displayStock').innerText = stockId;
+        const tbody = document.getElementById('resultTable');
+        tbody.innerHTML = "";
+        
+        // 將年份由新到舊排序
+        const sortedYears = Object.keys(yearlySum).sort((a, b) => b - a);
+
+        sortedYears.forEach(year => {
+            const perShareTotal = yearlySum[year];
+            const totalEstimated = perShareTotal * numShares;
+            
+            const row = `
+                <tr>
+                    <td class="fw-bold">${year} 年</td>
+                    <td class="text-end text-primary">${perShareTotal.toFixed(2)} 元</td>
+                    <td class="text-end fw-bold text-success">$${Math.round(totalEstimated).toLocaleString()}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+
+        // 顯示結果卡片
+        document.getElementById('resultArea').style.display = 'block';
+
+    } catch (error) {
+        console.error("Error Detail:", error);
+        alert("錯誤: " + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "開始計算股利";
+    }
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
