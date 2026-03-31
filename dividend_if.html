@@ -172,7 +172,7 @@ async function runAnalysis(token, portfolio, year) {
 
         console.log(`📈 年度累積每股股利: ${yearTotalDividend}`);
         
-        const isBond = sid.endsWith('B');
+        
         const name = stockMap[sid] || (isBond ? "債券型 ETF" : "未知股票");
         const stockSum = yearTotalDividend * (stock.shares * 1000);
         finalSum += stockSum;
