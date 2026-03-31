@@ -139,6 +139,7 @@ async function runAnalysis(token, portfolio, year) {
 
     for (const stock of portfolio) {
         const sid = stock.id.toUpperCase();
+        const isBond = sid.endsWith('B'); // 判斷是否為債券 ETF
         console.group(`🔍 正在分析標的: ${sid}`);
 
         // 根據類型選擇不同的資料集
