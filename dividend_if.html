@@ -157,11 +157,18 @@ async function runAnalysis(token, portfolio, year) {
             console.log(`📡 API 回傳結果:`, res);
             
             if (res.data && res.data.length > 0) {
-                res.data.forEach(item => {
+               res.data.forEach((item, index) => {
                     // 關鍵修正：債券 ETF 在此資料集的配息欄位通常是 CashDividend 或 CashEarningsDistribution
                     // 我們把所有可能的數值加總 (有些債券會拆成多筆記錄)
-                    const div = parseFloat(item.CashEarningsDistribution || item.CashDividend || item.dividend || 0);
+                    // 債券 ETF 優先取用 stock_and_cache_dividend
+                    const val = parseFloat(
+                        item.stock_and_cache_dividend || 
+                        item.dividend || 
+                        item.CashEarningsDistribution || 
+                        item.CashDividend || 0
+                    );
                     yearTotalDividend += div;
+                    console.log(`  └─ 第 ${index + 1} 筆配息: ${div} 元`);
                 });
             } else {
                 console.warn(`⚠️ ${sid} 在 ${year} 年查無資料`);
