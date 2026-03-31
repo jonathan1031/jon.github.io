@@ -161,7 +161,7 @@ async function runAnalysis(token, portfolio, year) {
                     // 關鍵修正：債券 ETF 在此資料集的配息欄位通常是 CashDividend 或 CashEarningsDistribution
                     // 我們把所有可能的數值加總 (有些債券會拆成多筆記錄)
                     // 債券 ETF 優先取用 stock_and_cache_dividend
-                    const val = parseFloat(
+                    const div = parseFloat(
                         item.stock_and_cache_dividend || 
                         item.dividend || 
                         item.CashEarningsDistribution || 
