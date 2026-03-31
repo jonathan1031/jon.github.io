@@ -109,18 +109,27 @@ async function calculateDividend() {
         const yearlySum = {};
         
         data.forEach(item => {
-            // 解析年份 (從 date 欄位抓取前四碼)
-            const year = item.date ? item.date.substring(0, 4) : "Unknown";
+            // 自動偵測年份 (支援 date 或 Date 欄位)
+            const dateStr = item.date || item.Date || "";
+            const year = dateStr.substring(0, 4);
             
-            // 重要：修正 NaN 關鍵點
-            // FinMind 欄位為 CashDividend (注意大小寫)
-            const cashVal = parseFloat(item.CashDividend);
-            
-            // 如果 cashVal 是數字才加總，否則當作 0
-            if (!isNaN(cashVal)) {
-                yearlySum[year] = (yearlySum[year] || 0) + cashVal;
+            if (year && year !== "") {
+                // 自動偵測現金股利欄位 (不論大小寫)
+                // 優先找 CashDividend，若無則找屬性名包含 'dividend' 的欄位
+                const cashVal = parseFloat(item.CashDividend || item.cash_dividend || item.cashdividend || 0);
+                
+                if (!isNaN(cashVal) && cashVal > 0) {
+                    yearlySum[year] = (yearlySum[year] || 0) + cashVal;
+                }
             }
         });
+
+        // 檢查加總後是否有資料
+        if (Object.keys(yearlySum).length === 0) {
+            tbody.innerHTML = "<tr><td colspan='3' class='text-center text-muted'>API 有回傳資料，但找不到對應的股利數值，請檢查 Console。</td></tr>";
+            console.log("API 原始回傳範例：", data[0]); // 協助調試
+            return;
+        }
 
         // 渲染畫面
         document.getElementById('displayStock').innerText = stockId;
