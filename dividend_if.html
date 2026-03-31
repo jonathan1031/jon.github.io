@@ -1,24 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股利自動核算系統 - dividend_if</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; color: #333; }
+        .main-container { max-width: 900px; margin-top: 50px; }
+        .card { border-radius: 15px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .result-table-container { background: white; border-radius: 12px; overflow: hidden; }
+        .total-banner { 
+            background: linear-gradient(135deg, #0d6efd 0%, #003d99 100%); 
+            color: white; 
+            border-radius: 15px; 
+            padding: 25px; 
+            margin-top: 20px; 
+        }
+        #loading { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container main-container">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold">個人庫存股利試算系統</h2>
+        <p class="text-muted">上傳 TXT 配置檔，自動按年份與張數計算總收益</p>
+    </div>
+
+    <div class="card p-4 mb-4">
+        <label class="form-label fw-bold mb-3">1. 上傳庫存配置檔 (.txt)</label>
+        <input type="file" id="fileInput" class="form-control mb-3" accept=".txt">
+        
+        <div class="alert alert-secondary small">
+            <strong>TXT 檔案格式範例：</strong><br>
+            TOKEN:你的FinMind金鑰<br>
+            YEAR:2024<br>
+            2330,1.5<br>
+            2884,3.0
+        </div>
+        
+        <button onclick="processFile()" id="btnRun" class="btn btn-primary w-100 py-2 fw-bold">開始批次試算</button>
+    </div>
+
+    <div id="loading" class="text-center p-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3 fw-bold">正在連線 FinMind 撈取資料，請稍候...</p>
+    </div>
+
+    <div id="resultArea" style="display:none;">
+        <div class="result-table-container p-3 mb-4 shadow-sm">
+            <h5 class="mb-3 border-bottom pb-2 fw-bold">資產收益明細</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>股票代碼</th>
+                            <th>指定年份</th>
+                            <th>持有數量</th>
+                            <th class="text-end">該年每股股利</th>
+                            <th class="text-end">小計 (總股利)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="total-banner shadow">
+            <h5 class="opacity-75">清單內所有項目總預計收益</h5>
+            <h1 id="grandTotal" class="fw-bold mb-0 text-warning">$0</h1>
+        </div>
+    </div>
+</div>
+
 <script>
 async function processFile() {
     const fileInput = document.getElementById('fileInput');
-    if (!fileInput.files.length) return alert("請選取 TXT 檔案！");
+    if (!fileInput.files.length) return alert("請先選取 TXT 檔案！");
 
     const file = fileInput.files[0];
     const reader = new FileReader();
 
     reader.onload = async function(e) {
         const text = e.target.result;
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
+        // 分割行，支援不同作業系統換行符號
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== "");
         
         let apiToken = "";
-        let targetYear = ""; // 全局年份
+        let targetYear = ""; 
         const portfolio = [];
 
         lines.forEach(line => {
-            if (line.startsWith("TOKEN:")) {
-                apiToken = line.replace("TOKEN:", "").trim();
-            } else if (line.startsWith("YEAR:")) {
-                targetYear = line.replace("YEAR:", "").trim();
+            if (line.toUpperCase().startsWith("TOKEN:")) {
+                apiToken = line.split(':')[1].trim();
+            } else if (line.toUpperCase().startsWith("YEAR:")) {
+                targetYear = line.split(':')[1].trim();
             } else {
                 const parts = line.split(',');
                 if (parts.length >= 2) {
@@ -30,9 +107,9 @@ async function processFile() {
             }
         });
 
-        if (!apiToken) return alert("錯誤：檔案中找不到 TOKEN: 行！");
-        if (!targetYear) return alert("錯誤：檔案中找不到 YEAR: 行！");
-        if (portfolio.length === 0) return alert("錯誤：找不到有效的股票清單 (代碼,張數)！");
+        if (!apiToken) return alert("錯誤：找不到 TOKEN 行！");
+        if (!targetYear) return alert("錯誤：找不到 YEAR 行！");
+        if (portfolio.length === 0) return alert("錯誤：找不到有效的股票清單！");
 
         await runAnalysis(apiToken, portfolio, targetYear);
     };
@@ -40,7 +117,6 @@ async function processFile() {
     reader.readAsText(file);
 }
 
-// 修改 runAnalysis 參數，接收 targetYear
 async function runAnalysis(token, portfolio, year) {
     const loading = document.getElementById('loading');
     const resultArea = document.getElementById('resultArea');
@@ -57,7 +133,7 @@ async function runAnalysis(token, portfolio, year) {
 
     try {
         for (const stock of portfolio) {
-            // 使用全域設定的 year
+            // 抓取該年度整年的股利資料
             const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${stock.id}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
             
             const response = await fetch(url);
@@ -66,6 +142,7 @@ async function runAnalysis(token, portfolio, year) {
             let yearTotalDividend = 0;
             if (resData.data && resData.data.length > 0) {
                 resData.data.forEach(item => {
+                    // 同時檢查一般股利與盈餘分配欄位 (解決 NaN 問題)
                     const cash = parseFloat(item.CashEarningsDistribution || item.CashDividend || 0);
                     yearTotalDividend += cash;
                 });
@@ -74,27 +151,34 @@ async function runAnalysis(token, portfolio, year) {
             const stockTotalMoney = yearTotalDividend * (stock.shares * 1000);
             finalSum += stockTotalMoney;
 
+            // 渲染表格內容
             tbody.innerHTML += `
                 <tr>
                     <td class="fw-bold">${stock.id}</td>
-                    <td><span class="badge bg-primary">${year}</span></td>
+                    <td><span class="badge bg-light text-dark border">${year}</span></td>
                     <td>${stock.shares} 張</td>
                     <td class="text-end text-primary">${yearTotalDividend.toFixed(2)} 元</td>
                     <td class="text-end fw-bold text-success">$${Math.round(stockTotalMoney).toLocaleString()}</td>
                 </tr>
             `;
-            await new Promise(r => setTimeout(r, 250));
+            
+            // 延遲 300ms 避免觸發 API 頻率限制
+            await new Promise(r => setTimeout(r, 300));
         }
 
         grandTotalLabel.innerText = `$${Math.round(finalSum).toLocaleString()}`;
         resultArea.style.display = 'block';
 
     } catch (err) {
-        console.error(err);
-        alert("運算過程發生錯誤，請檢查 Console。");
+        console.error("Error Detail:", err);
+        alert("運算發生錯誤，請檢查 Token 是否有效或查看 Console。");
     } finally {
         loading.style.display = 'none';
         btn.disabled = false;
     }
 }
 </script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
