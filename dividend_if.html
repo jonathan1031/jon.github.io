@@ -1,0 +1,100 @@
+<script>
+async function processFile() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files.length) return alert("請選取 TXT 檔案！");
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async function(e) {
+        const text = e.target.result;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
+        
+        let apiToken = "";
+        let targetYear = ""; // 全局年份
+        const portfolio = [];
+
+        lines.forEach(line => {
+            if (line.startsWith("TOKEN:")) {
+                apiToken = line.replace("TOKEN:", "").trim();
+            } else if (line.startsWith("YEAR:")) {
+                targetYear = line.replace("YEAR:", "").trim();
+            } else {
+                const parts = line.split(',');
+                if (parts.length >= 2) {
+                    portfolio.push({
+                        id: parts[0].trim(),
+                        shares: parseFloat(parts[1].trim())
+                    });
+                }
+            }
+        });
+
+        if (!apiToken) return alert("錯誤：檔案中找不到 TOKEN: 行！");
+        if (!targetYear) return alert("錯誤：檔案中找不到 YEAR: 行！");
+        if (portfolio.length === 0) return alert("錯誤：找不到有效的股票清單 (代碼,張數)！");
+
+        await runAnalysis(apiToken, portfolio, targetYear);
+    };
+
+    reader.readAsText(file);
+}
+
+// 修改 runAnalysis 參數，接收 targetYear
+async function runAnalysis(token, portfolio, year) {
+    const loading = document.getElementById('loading');
+    const resultArea = document.getElementById('resultArea');
+    const tbody = document.getElementById('stockTableBody');
+    const grandTotalLabel = document.getElementById('grandTotal');
+    const btn = document.getElementById('btnRun');
+
+    loading.style.display = 'block';
+    resultArea.style.display = 'none';
+    btn.disabled = true;
+    tbody.innerHTML = "";
+
+    let finalSum = 0;
+
+    try {
+        for (const stock of portfolio) {
+            // 使用全域設定的 year
+            const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${stock.id}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
+            
+            const response = await fetch(url);
+            const resData = await response.json();
+            
+            let yearTotalDividend = 0;
+            if (resData.data && resData.data.length > 0) {
+                resData.data.forEach(item => {
+                    const cash = parseFloat(item.CashEarningsDistribution || item.CashDividend || 0);
+                    yearTotalDividend += cash;
+                });
+            }
+
+            const stockTotalMoney = yearTotalDividend * (stock.shares * 1000);
+            finalSum += stockTotalMoney;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td class="fw-bold">${stock.id}</td>
+                    <td><span class="badge bg-primary">${year}</span></td>
+                    <td>${stock.shares} 張</td>
+                    <td class="text-end text-primary">${yearTotalDividend.toFixed(2)} 元</td>
+                    <td class="text-end fw-bold text-success">$${Math.round(stockTotalMoney).toLocaleString()}</td>
+                </tr>
+            `;
+            await new Promise(r => setTimeout(r, 250));
+        }
+
+        grandTotalLabel.innerText = `$${Math.round(finalSum).toLocaleString()}`;
+        resultArea.style.display = 'block';
+
+    } catch (err) {
+        console.error(err);
+        alert("運算過程發生錯誤，請檢查 Console。");
+    } finally {
+        loading.style.display = 'none';
+        btn.disabled = false;
+    }
+}
+</script>
