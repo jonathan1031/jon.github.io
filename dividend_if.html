@@ -144,7 +144,10 @@ async function runAnalysis(token, portfolio, year) {
     try {
         for (const stock of portfolio) {
             document.getElementById('loadingText').innerText = `正在分析: ${stock.id} ${stockMap[stock.id] || ''}...`;
-            
+
+            // 判斷是否為債券 ETF (代碼末尾為 B)
+            const isBond = stock.id.toUpperCase().endsWith('B');
+            const dataset = isBond ? 'TaiwanStockMonthDividend' : 'TaiwanStockDividend';
             const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${stock.id}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
             
             const response = await fetch(url);
@@ -153,11 +156,23 @@ async function runAnalysis(token, portfolio, year) {
             let yearTotalDividend = 0;
             if (resData.data && resData.data.length > 0) {
                 resData.data.forEach(item => {
-                    const cash = parseFloat(item.CashEarningsDistribution || item.CashDividend || 0);
+                    // 債券資料集的欄位通常是 dividend，普通股是 CashDividend
+                    const cash = parseFloat(item.dividend || item.CashEarningsDistribution || item.CashDividend || 0);
                     yearTotalDividend += cash;
                 });
             }
 
+            // 如果普通股資料集撈不到且不是 B 結尾，再補撈一次月配資料集 (預防萬一)
+            if (yearTotalDividend === 0 && !isBond) {
+                const retryUrl = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthDividend&data_id=${stock.id}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
+                const retryRes = await (await fetch(retryUrl)).json();
+                if (retryRes.data) {
+                    retryRes.data.forEach(item => {
+                        yearTotalDividend += parseFloat(item.dividend || 0);
+                    });
+                }
+            }            
+            
             const stockName = stockMap[stock.id] || "未知股票";
             const stockTotalMoney = yearTotalDividend * (stock.shares * 1000);
             finalSum += stockTotalMoney;
