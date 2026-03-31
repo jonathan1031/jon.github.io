@@ -133,88 +133,62 @@ async function processFile() {
 
 async function runAnalysis(token, portfolio, year) {
     const tbody = document.getElementById('stockTableBody');
-    const grandTotalLabel = document.getElementById('grandTotal');
-    const displayYear = document.getElementById('displayYear');
-    const btn = document.getElementById('btnRun');
-
     tbody.innerHTML = "";
-    displayYear.innerText = year + " 年";
+    document.getElementById('displayYear').innerText = year + " 年";
     let finalSum = 0;
 
-    try {
-        for (const stock of portfolio) {
-            document.getElementById('loadingText').innerText = `正在分析: ${stock.id} ${stockMap[stock.id] || ''}...`;
+    for (const stock of portfolio) {
+        const sid = stock.id.toUpperCase();
+        console.group(`🔍 正在分析標的: ${sid}`);
+        
+        let yearTotalDividend = 0;
 
-            // 判斷是否為債券 ETF (代碼末尾為 B)
-            // 1. 強制代碼轉大寫 (解決 b 與 B 的問題)
-            const sid = stock.id.toUpperCase();
-            const isBond = sid.endsWith('B');
+        // 統一使用 TaiwanStockDividend，這個資料集通常支援 CORS 且包含債券配息
+        const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${sid}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
+        
+        try {
+            const response = await fetch(url);
+            const res = await response.json();
+            console.log(`📡 API 回傳結果:`, res);
             
-            // 2. 準備多個資料集來源嘗試 (債券優先讀 MonthDividend)
-            const datasets = isBond 
-            ? ['TaiwanStockMonthDividend', 'TaiwanStockDividend'] 
-            : ['TaiwanStockDividend', 'TaiwanStockMonthDividend'];
-   
-            let yearTotalDividend = 0;
-            document.getElementById('loadingText').innerText = `分析中: ${sid} ${stockMap[sid] || ''}...`;
-    
-            // 嘗試從不同資料集撈取資料
-            for (const ds of datasets) {
-                try {
-                    const url = `https://api.finmindtrade.com/api/v4/data?dataset=${ds}&data_id=${sid}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
-                    const response = await fetch(url);
-                    const res = await response.json();
-
-                    console.log(`📡 Dataset [${ds}] 回傳結果:`, res);
-                    
-                    if (res.data && res.data.length > 0) {
-                        
-                        res.data.forEach(item => {
-                            
-                            // 3. 終極欄位對應：涵蓋月配、年配、台積電特殊欄位
-                            const val = parseFloat(
-                                item.dividend || 
-                                item.CashEarningsDistribution || 
-                                item.CashDividend || 0
-                            );
-                            yearTotalDividend += val;
-                        });
-                        // 如果在這個資料集撈到資料了，就跳出循環不跑下一個資料集
-                        if (yearTotalDividend > 0) break; 
-                    }
-                } catch (e) {
-                    console.error(`${sid} 在 ${ds} 讀取失敗`, e);
-                }
+            if (res.data && res.data.length > 0) {
+                res.data.forEach(item => {
+                    // 關鍵修正：債券 ETF 在此資料集的配息欄位通常是 CashDividend 或 CashEarningsDistribution
+                    // 我們把所有可能的數值加總 (有些債券會拆成多筆記錄)
+                    const div = parseFloat(item.CashEarningsDistribution || item.CashDividend || item.dividend || 0);
+                    yearTotalDividend += div;
+                });
+            } else {
+                console.warn(`⚠️ ${sid} 在 ${year} 年查無資料`);
             }
-            
-            const stockName = stockMap[stock.id] || "未知股票";
-            const stockTotalMoney = yearTotalDividend * (stock.shares * 1000);
-            finalSum += stockTotalMoney;
-
-            tbody.innerHTML += `
-                <tr>
-                    <td>
-                        <div class="fw-bold">${stockName}</div>
-                        <div class="small text-muted">${stock.id}</div>
-                    </td>
-                    <td>${stock.shares} 張</td>
-                    <td class="text-end text-primary">${yearTotalDividend.toFixed(2)} 元</td>
-                    <td class="text-end fw-bold text-success">$${Math.round(stockTotalMoney).toLocaleString()}</td>
-                </tr>
-            `;
-            
-            await new Promise(r => setTimeout(r, 200));
+        } catch (err) { 
+            console.error(`❌ ${sid} 請求失敗`, err); 
         }
 
-        grandTotalLabel.innerText = `$${Math.round(finalSum).toLocaleString()}`;
-        document.getElementById('resultArea').style.display = 'block';
+        console.log(`📈 年度累積每股股利: ${yearTotalDividend}`);
+        
+        const isBond = sid.endsWith('B');
+        const name = stockMap[sid] || (isBond ? "債券型 ETF" : "未知股票");
+        const stockSum = yearTotalDividend * (stock.shares * 1000);
+        finalSum += stockSum;
 
-    } catch (err) {
-        alert("計算失敗，請檢查網路或 Token。");
-    } finally {
-        document.getElementById('loading').style.display = 'none';
-        btn.disabled = false;
+        tbody.innerHTML += `
+            <tr>
+                <td><div class="fw-bold">${name}</div><div class="small text-muted">${sid}</div></td>
+                <td>${stock.shares} 張</td>
+                <td class="text-end text-primary">${yearTotalDividend.toFixed(4)} 元</td>
+                <td class="text-end fw-bold text-success">$${Math.round(stockSum).toLocaleString()}</td>
+            </tr>
+        `;
+        console.groupEnd();
+        // 稍微拉長延遲，確保 API 穩定
+        await new Promise(r => setTimeout(r, 500));
     }
+
+    document.getElementById('grandTotal').innerText = `$${Math.round(finalSum).toLocaleString()}`;
+    document.getElementById('resultArea').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('btnRun').disabled = false;
 }
 </script>
 
