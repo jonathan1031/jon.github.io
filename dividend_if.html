@@ -140,11 +140,15 @@ async function runAnalysis(token, portfolio, year) {
     for (const stock of portfolio) {
         const sid = stock.id.toUpperCase();
         console.group(`🔍 正在分析標的: ${sid}`);
+
+        // 根據類型選擇不同的資料集
+        const dataset = isBond ? 'TaiwanStockDividendResult' : 'TaiwanStockDividend';
+        
+        console.group(`🔍 標的: ${sid} [${isBond ? '債券分流' : '股票分流'}]`);
+        console.log(`📡 使用資料集: ${dataset}`);
         
         let yearTotalDividend = 0;
-
-        // 統一使用 TaiwanStockDividend，這個資料集通常支援 CORS 且包含債券配息
-        const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&data_id=${sid}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
+        const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${sid}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
         
         try {
             const response = await fetch(url);
