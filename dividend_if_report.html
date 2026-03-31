@@ -13,6 +13,11 @@
         #loading { display: none; }
         .btn-excel { background-color: #198754; color: white; }
         .btn-excel:hover { background-color: #157347; color: white; }
+        /* 總金額橫幅樣式 */
+        .summary-banner { 
+            background: linear-gradient(135deg, #0d6efd 0%, #003d99 100%); 
+            color: white; border-radius: 15px; padding: 20px; 
+        }
     </style>
 </head>
 <body>
@@ -39,15 +44,21 @@
     </div>
 
     <div id="resultArea" style="display:none;">
+        
+        <div class="summary-banner shadow mb-4 text-center">
+            <h5 class="opacity-75 mb-1"><span id="summaryYear"></span> 年度預估總收益</h5>
+            <h1 id="grandTotal" class="fw-bold mb-0 text-warning">$0</h1>
+        </div>
+
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="fw-bold text-primary mb-0"><span id="displayYear"></span> 資產收益明細</h4>
-            <button onclick="exportToExcel()" class="btn btn-excel fw-bold">
-                <i class="bi bi-file-earmark-excel"></i> 匯出 Excel 報表
+            <h5 class="fw-bold text-primary mb-0">資產收益明細</h5>
+            <button onclick="exportToExcel()" class="btn btn-excel fw-bold btn-sm">
+                匯出 Excel 報表
             </button>
         </div>
 
         <div class="table-responsive">
-            <table class="table table-hover align-middle bg-white shadow-sm rounded" id="resultTable">
+            <table class="table table-hover align-middle bg-white shadow-sm rounded">
                 <thead class="table-light">
                     <tr>
                         <th>股票/債券名稱</th>
@@ -60,18 +71,14 @@
                 <tbody id="stockTableBody"></tbody>
             </table>
         </div>
-
-        <div class="alert alert-primary text-center mt-4 shadow">
-            <h5>預估總領取金額：<span id="grandTotal" class="fw-bold text-danger">$0</span></h5>
-        </div>
     </div>
 </div>
 
 <script>
 let stockMap = {}; 
-let exportData = []; // 用於儲存要匯出的資料
+let exportData = []; 
+let currentYear = "";
 
-// 抓取股票名稱
 async function fetchStockNames(token) {
     try {
         const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo&token=${token}`;
@@ -100,6 +107,7 @@ async function processFile() {
         });
 
         if (!apiToken || !targetYear) return alert("檔案內容缺少 TOKEN 或 YEAR");
+        currentYear = targetYear;
 
         document.getElementById('loading').style.display = 'block';
         document.getElementById('resultArea').style.display = 'none';
@@ -120,25 +128,15 @@ async function runAnalysis(token, portfolio, year) {
         const isBond = sid.endsWith('B');
         const dataset = isBond ? 'TaiwanStockDividendResult' : 'TaiwanStockDividend';
         
-        console.group(`🔍 標的: ${sid}`);
         let yearTotalDividend = 0;
-
         const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${sid}&start_date=${year}-01-01&end_date=${year}-12-31&token=${token}`;
         
         try {
             const response = await fetch(url);
             const res = await response.json();
-            
             if (res.data && res.data.length > 0) {
                 res.data.forEach(item => {
-                    // 根據截圖修正：債券優先抓 stock_and_cache_dividend
-                    const val = parseFloat(
-                        item.stock_and_cache_dividend || 
-                        item.dividend || 
-                        item.CashEarningsDistribution || 
-                        item.CashDividend || 0
-                    );
-                    yearTotalDividend += val;
+                    yearTotalDividend += parseFloat(item.stock_and_cache_dividend || item.dividend || item.CashEarningsDistribution || item.CashDividend || 0);
                 });
             }
         } catch (err) { console.error(`${sid} 請求失敗`, err); }
@@ -147,12 +145,11 @@ async function runAnalysis(token, portfolio, year) {
         const stockSum = Math.round(yearTotalDividend * (stock.shares * 1000));
         finalSum += stockSum;
 
-        // 存入匯出陣列
         exportData.push({
             "股票/債券名稱": name,
             "代碼": sid,
             "持有張數": stock.shares,
-            "每股股利": yearTotalDividend.toFixed(4),
+            "每股股利": parseFloat(yearTotalDividend.toFixed(4)),
             "小計收益": stockSum
         });
 
@@ -165,27 +162,30 @@ async function runAnalysis(token, portfolio, year) {
                 <td class="text-end fw-bold text-success">$${stockSum.toLocaleString()}</td>
             </tr>
         `;
-        console.groupEnd();
         await new Promise(r => setTimeout(r, 500));
     }
 
+    // 修改點 2: Excel 報表加入總領取金額 (在陣列最後增加總計列)
+    exportData.push({
+        "股票/債券名稱": "總計預計收益",
+        "代碼": "",
+        "持有張數": "",
+        "每股股利": "",
+        "小計收益": finalSum
+    });
+
+    document.getElementById('summaryYear').innerText = year;
     document.getElementById('grandTotal').innerText = `$${Math.round(finalSum).toLocaleString()}`;
-    document.getElementById('displayYear').innerText = year;
     document.getElementById('resultArea').style.display = 'block';
     document.getElementById('loading').style.display = 'none';
 }
 
-// 產生 Excel 函式
 function exportToExcel() {
     if (exportData.length === 0) return alert("沒有資料可匯出");
-
-    const year = document.getElementById('displayYear').innerText;
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "股利清單");
-    
-    // 檔名：2024_股利試算報表.xlsx
-    XLSX.writeFile(wb, `${year}_股利試算報表.xlsx`);
+    XLSX.writeFile(wb, `${currentYear}_股利試算報表.xlsx`);
 }
 </script>
 
