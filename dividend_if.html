@@ -168,7 +168,7 @@ async function runAnalysis(token, portfolio, year) {
                     console.log(`📡 Dataset [${ds}] 回傳結果:`, res);
                     
                     if (res.data && res.data.length > 0) {
-                        console.log(`res.data:`, res.data);
+                        
                         res.data.forEach(item => {
                             
                             // 3. 終極欄位對應：涵蓋月配、年配、台積電特殊欄位
